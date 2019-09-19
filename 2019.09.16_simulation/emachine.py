@@ -1,6 +1,5 @@
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder
-from scipy.sparse import csr_matrix
 
 def generate_interactions(n,m,g,sp,i1i2):
     """gerate interaction:
@@ -134,38 +133,29 @@ def ij_2d_from_1d(n_var,m,i1i2):
     return ij_2d.astype(int)
 
 #=========================================================================================
-def operators(s,n_var,i1i2,mx):
+def operators(s,n_var,i1i2):
     """
     input: s[n_seq, n_var*m]: one hot   
     output: ops[n_seq,n_ops] : onehot, indepent variables
     ij_2d: convert ops index to 2d indices (ia,jb)
     """   
     n_seq,nm = s.shape
-    #m = int(nm/float(n_var)) # numer of categories at each position
-    #n_linear = int((m-1)*n_var)
-    #n_quad = int(((m-1)**2)*n_var*(n_var-1)/2.)
+    m = int(nm/float(n_var)) # numer of categories at each position
 
-    mx_sum = mx.sum()
-    n_linear = mx_sum - n_var
-    n_quad = int((mx_sum**2 - np.sum(mx**2))/2.)
-    
+    n_linear = int((m-1)*n_var)
+    n_quad = int(((m-1)**2)*n_var*(n_var-1)/2.)
     n_ops = n_linear + n_quad
-
-    print(n_linear,n_quad,n_ops)   
         
-    ops = np.zeros((n_seq,n_ops),dtype=np.int8)
-    cov = np.zeros(n_ops)
-
+    ops = np.zeros((n_seq,n_ops))
+    
     iops = 0
     # linear terms    
     for i in range(n_var):
         i1,i2 = i1i2[i,0],i1i2[i,1]
         for ia in range(i1,i2-1):
-            ops[:,iops] = (s[:,ia] - s[:,i2-1])
-            cov[iops] = 2./mx[i]                   
-            #a = (s[:,ia] - s[:,i2-1])
+            ops[:,iops] = (s[:,ia] - s[:,i2-1])                   
             iops += 1
-
+    
     # quadratic terms
     for i in range(n_var-1):
         i1,i2 = i1i2[i,0],i1i2[i,1]
@@ -173,20 +163,19 @@ def operators(s,n_var,i1i2,mx):
             j1,j2 = i1i2[j,0],i1i2[j,1]
             for ia in range(i1,i2-1):
                 for jb in range(j1,j2-1):
-                    ops[:,iops] = (s[:,ia] - s[:,i2-1])*(s[:,jb] - s[:,j2-1])
-                    cov[iops] = 4./(mx[i]*mx[j])                                        
+                    ops[:,iops] = (s[:,ia] - s[:,i2-1])*(s[:,jb] - s[:,j2-1])                                        
                     iops += 1
                         
-    return ops,cov
-
+    return ops
 #=========================================================================================
 def generate_seq(w_true_ops,n_seq,n_var,m,i1i2,n_sample=30):
     """
+
     """
     samples = np.random.choice(np.arange(m),size=(n_seq*n_sample,n_var),replace=True)
 
     onehot_encoder = OneHotEncoder(sparse=False,categories='auto')
-    s = onehot_encoder.fit_transform(samples)  # one hot
+    s = onehot_encoder.fit_transform(samples)
 
     ops = operators_for_simulation(s,n_var,i1i2)
     
@@ -197,52 +186,36 @@ def generate_seq(w_true_ops,n_seq,n_var,m,i1i2,n_sample=30):
 
     out_samples = np.random.choice(np.arange(n_seq*n_sample),size=n_seq,replace=True,p=p)
 
-    #return s[out_samples]
-    return samples[out_samples]
-
+    return s[out_samples]
 #=========================================================================================
-def fit(ops_sp,cov,n_var,mx,eps=0.1,max_iter=100,alpha=0.1):
+def fit(ops,n_var,m,eps=0.1,max_iter=100,alpha=0.1):
     """
     input: ops[n_seq,n_ops], m: number of categories at each position
     """    
-    #n_linear = int((m-1)*n_var)
-    #n_quad = int(((m-1)**2)*n_var*(n_var-1)/2.)
-
-    #mx_sum = mx.sum()
-    #n_linear = mx_sum - n_var
-    #n_quad = int((mx_sum**2 - np.sum(mx**2))/2.)
+    n_linear = int((m-1)*n_var)
+    n_quad = int(((m-1)**2)*n_var*(n_var-1)/2.)
     
-    #cov = np.hstack([np.full(n_linear,2./m),np.full(n_quad,4./(m**2))])    
-    eps1 = eps - 1
+    cov = np.hstack([np.full(n_linear,2./m),np.full(n_quad,4./(m**2))])
+    
     E_av = np.zeros(max_iter)
-    #ops_sp = csr_matrix(ops)
-    n_ops = ops_sp.shape[1]
-    #n_ops = ops.shape[1]
-    
+    n_ops = ops.shape[1]
+
     np.random.seed(13)
-    #w = np.random.rand(n_ops)-0.5    
-    w = np.random.normal(0,0.1,n_ops)
-    for i in range(max_iter):
-        #print('iter:',i)              
-        #energy = ops.dot(w)
-        energy = ops_sp @ w   # sparse     
-        energy_min = energy.min()
-        #print('e:',(energy,energy.min(),energy.max()))
-
-        # to avoid a too lager value:
-        #prob = np.exp((energy-energy_min)*eps1) 
-        prob = np.exp(energy*eps1)
-        z_data = prob.sum()
-        #print('prob:',prob.min(),prob.max(),z_data)
-       
-        prob /= z_data
-        #print('prob min, max - normalized:',prob.min(),prob.max())
-
-        #ops_ex = np.sum(prob[:,np.newaxis]*ops,axis=0)
-        ops_ex = ops_sp.transpose() @ prob
+    w = np.random.rand(n_ops)-0.5    
+    for i in range(max_iter):              
+        #energies_w = energy_ops(ops,w)
+        energies_w = ops.dot(w)        
+        energies_max = energies_w.max()
         
-        w += alpha*(ops_ex - eps*w*cov)
-        E_av[i] = energy.mean()
+        # to avoid a too lager value:
+        probs_w = np.exp((energies_w-energies_max)*(eps-1)) 
+        z_data = np.sum(probs_w)
+        probs_w /= z_data
+        ops_expect_w = np.sum(probs_w[:,np.newaxis]*ops,axis=0)
+
+        E_av[i] = energies_w.mean()  
+        w += alpha*(ops_expect_w - eps*w*cov)
       
-    return w,-E_av
+    return w,-E_av[-1]
+
 
