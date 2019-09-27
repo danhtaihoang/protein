@@ -10,7 +10,7 @@ def frequency(s0,q,i1i2,theta=0.2,pseudo_weight=0.5):
     ma_inv = 1/(1+(dst < theta).sum(axis=1).astype(float))
     meff = ma_inv.sum() 
 
-    onehot_encoder = OneHotEncoder(sparse=False)
+    onehot_encoder = OneHotEncoder(sparse=False,categories='auto')
     s = onehot_encoder.fit_transform(s0)
 
     # fi_true:
@@ -87,8 +87,8 @@ def direct_info(s0,w):
     #w = (w+w.T)/2
 
     l,n = s0.shape
-    #mx = np.array([len(np.unique(s0[:,i])) for i in range(n)])
-    mx = np.array([m for i in range(n)])
+    mx = np.array([len(np.unique(s0[:,i])) for i in range(n)])
+    #mx = np.array([m for i in range(n)])
     mx_cumsum = np.insert(mx.cumsum(),0,0)
     i1i2 = np.stack([mx_cumsum[:-1],mx_cumsum[1:]]).T
 
