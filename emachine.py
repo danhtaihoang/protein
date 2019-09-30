@@ -113,10 +113,15 @@ def operators_for_simulation(s,n_var,i1i2):
     return ops
 
 #=========================================================================================
-def ij_2d_from_1d(n_var,m,i1i2):
-    n_linear = int((m-1)*n_var)
-    n_quad = int(((m-1)**2)*n_var*(n_var-1)/2.)
+def ij_2d_from_1d(n_var,i1i2,mx):
+    mx_sum = mx.sum()
+    n_linear = mx_sum - n_var
+    n_quad = int((mx_sum**2 - np.sum(mx**2))/2.)    
     n_ops = n_linear + n_quad
+
+    #n_linear = int((m-1)*n_var)
+    #n_quad = int(((m-1)**2)*n_var*(n_var-1)/2.)
+    #n_ops = n_linear + n_quad
         
     ij_2d = np.zeros((n_ops,2))    
     iops = n_linear
@@ -151,7 +156,7 @@ def operators(s,n_var,i1i2,mx):
     
     n_ops = n_linear + n_quad
 
-    print(n_linear,n_quad,n_ops)   
+    #print(n_linear,n_quad,n_ops)   
         
     ops = np.zeros((n_seq,n_ops),dtype=np.int8)
     cov = np.zeros(n_ops)
@@ -201,7 +206,7 @@ def generate_seq(w_true_ops,n_seq,n_var,m,i1i2,n_sample=30):
     return samples[out_samples]
 
 #=========================================================================================
-def fit(ops_sp,cov,n_var,mx,eps=0.1,max_iter=100,alpha=0.1):
+def fit(ops_sp,cov,n_var,mx,l1,eps=0.1,max_iter=100,alpha=0.1):
     """
     input: ops[n_seq,n_ops], m: number of categories at each position
     """    
@@ -241,7 +246,7 @@ def fit(ops_sp,cov,n_var,mx,eps=0.1,max_iter=100,alpha=0.1):
         #ops_ex = np.sum(prob[:,np.newaxis]*ops,axis=0)
         ops_ex = ops_sp.transpose() @ prob
         
-        w += alpha*(ops_ex - eps*w*cov)
+        w += alpha*(ops_ex - eps*w*cov - l1*np.sign(w))
         E_av[i] = energy.mean()
       
     return w,-E_av
